@@ -1,0 +1,54 @@
+# Compiled Lua sources
+luac.out
+
+# luarocks build files
+*.src.rock
+*.tar.gz
+
+# Object files
+*.o
+*.os
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.def
+*.exp
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+build/
+
+winona_battery_low/
+winona_battery_placement/
+rabbit/
+rabbit-wheel-a/*
+rabbitwheel-b/*
+
+# tmp
+f-first-try/*
+f-1/*
+rw-s/*
+
+*/*.zip
