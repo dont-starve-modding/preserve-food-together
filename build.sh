@@ -16,7 +16,8 @@ cp -r scripts/* build/scripts/
 # cp images/inventoryimages/*.xml build/images/inventoryimages
 # cp images/inventoryimages/*.tex build/images/inventoryimages
 # cp -r anim/*.zip build/anim/
-# cp preservefood.* build/
+cp preservefood.xml build/
+cp preservefood.tex build/
 cp *.lua build/
 
 cp CONTRIBUTORS build/
