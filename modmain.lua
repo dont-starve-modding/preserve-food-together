@@ -46,7 +46,7 @@ PrefabFiles = {
 
 Assets = {
     Asset("SOUND", "sound/rabbit.fsb"),
-    Asset("SOUND", "sound/mole.fsb")
+    Asset("SOUND", "sound/mole.fsb"),
 }
 
 STRINGS = GLOBAL.STRINGS
@@ -86,36 +86,16 @@ if (GetModConfigData("chill_duration") == "high") then
 end
 
 if (GetModConfigData("chill_wetness") == "low") then
-    TUNING.CHILL_DURATION = 40
+    TUNING.WETNESS = 40
 end
 if (GetModConfigData("chill_wetness") == "high") then
-    TUNING.CHILL_DURATION = 80
-end
-
--- all ice prefabs have the chiller component
-AddPrefabPostInit("ice", function(inst)
-    inst:AddComponent("chiller")
-end)
-
--- what to do, when chill duration is over
-function startperishing(target)
-    print("starting to perish again...")
-    if target.components.perishable ~= nil then
-        target.components.perishable:StartPerishing()
-
-        if target.components.inventoryitem ~= nil then
-            target.components.inventoryitem:AddMoisture(50)
-        else
-            print("target does not have inventoryitem component")
-        end
-    else
-        print("target does not have perishable component")
-    end
+    TUNING.WETNESS = 80
 end
 
 -- what to do when chilling starts
 function chill(act)
-    print("chilling...")
+    -- print("chilling...")
+    -- DumpEntity(act.target)
 
     if act.target.prefab == "rabbit" then
         act.target.SoundEmitter:PlaySound("dontstarve/rabbit/scream_short")
@@ -123,37 +103,42 @@ function chill(act)
         return false
     end
 
-    
     if act.target.prefab == "mole" then
-        act.target.SoundEmitter:PlaySound("dontstarve/mole/emerge_voice")
+        act.target.SoundEmitter:PlaySound("dontstarve_DLC001/creatures/mole/pickup")
 
-        return false
+        -- moles eat ice
+        act.invobject.components.stackable:Get(1):Remove()
+
+        return true
     end
 
-    if (not act.target:HasTag("fresh") 
-        and not act.target:HasTag("stale") 
-        and not act.target:HasTag("spoiled"))
+    if act.target.components.perishable == nil
         or act.target.components.chiller ~= nil
-        or act.target.components.edible == nil 
+        or (act.target.components.edible == nil 
+            and act.target.prefab ~= "hambat")
+        or act.target.components.chillable == nil
             then
         return false
     end
 
-    print("stopping to perish...")
+    print("starting to chill on chillable component...")
 
-    local stop_perish_duration = TUNING.CHILL_DURATION
+    local chill_duration = TUNING.CHILL_DURATION
 
-    if act.target.components.perishable ~= nil then
-        act.target.components.perishable:StopPerishing()
-
-        if act.target.components.perishable:IsStale() then
-            stop_perish_duration = stop_perish_duration * TUNING.STALE_MULT
-        elseif act.target.components.perishable:IsSpoiled() then
-            stop_perish_duration = stop_perish_duration * TUNING.SPOILED_MULT
+    if act.invobject.components.perishable ~= nil then
+        if act.invobject.components.perishable:IsStale() then
+            chill_duration = chill_duration * TUNING.STALE_MULT
+        elseif act.invobject.components.perishable:IsSpoiled() then
+            chill_duration = chill_duration * TUNING.SPOILED_MULT
         end
-
-        act.target:DoTaskInTime(stop_perish_duration, startperishing, act.target)
     end
+
+    if act.target.components.stackable ~= nil then
+        print("is stackable: " .. act.target.components.stackable.stacksize)
+        chill_duration = chill_duration / act.target.components.stackable.stacksize
+    end
+
+    act.target.components.chillable:Chill(chill_duration)
 
     act.invobject.components.stackable:Get(1):Remove()
 
@@ -163,7 +148,7 @@ end
 -- new GLOBAL Action "CHILL"
 AddAction('CHILL', 'Chill', chill)
 
--- Chilling takes some time
+-- Chilling Action takes some time
 AddStategraphActionHandler('wilson_client', GLOBAL.ActionHandler(GLOBAL.ACTIONS.CHILL, "dolongaction"))
 AddStategraphActionHandler('wilson', GLOBAL.ActionHandler(GLOBAL.ACTIONS.CHILL, "dolongaction"))
 
@@ -171,6 +156,7 @@ AddStategraphActionHandler('wilson', GLOBAL.ActionHandler(GLOBAL.ACTIONS.CHILL, 
 -- mostly a check whether to provide the CHILL action or not based hovered item
 function chiller(inst, doer, target, actions, right)
     -- print("using item with component chiller on something " .. tostring(right))
+    -- DumpEntity(target)
     if right 
         and (target:HasTag("fresh") or target:HasTag("stale") or target:HasTag("spoiled")) then
         -- print("match!")
@@ -181,50 +167,134 @@ end
 -- every prefab with the chiller component can be used in inventory
 AddComponentAction("USEITEM", "chiller", chiller)
 
+-- code below this statement is only executed on servers and not on clients
+if not GLOBAL.TheNet:GetIsServer() then
+    return
+end
 
--- AddComponentPostInit("perishable", function(inst)
---     inst.
+-- ice adjustments: ----------------
 
---     local fn = inst.StartPerishing
---     inst.StartPerishing = function()
-        
---         fn()
---     end
--- end)
+-- all ice prefabs have the chiller component
+function tuwas(inst)
+    inst:AddComponent("chiller")
+end
 
--- local function PerishablePostInit(self, inst)
---     self.interrupted_until = nil
---     self.interrupted_task = nil
+AddPrefabPostInit("ice", tu_was)
 
---     print("postinit loaded")
---     local start_perishing = self.StartPerishing
---     self.StartPerishing = function ()
---         start_perishing()
---     end
+-- stackable adjustments: ----------
 
---     local long_update = self.LongUpdate
---     self.LongUpdate = function (dt)
+local function stackable_stuff(self, inst)
+    -- overwrite Get and Put
 
---         if self.interrupted_task ~= nil then
--- 			self.interrupted_task:Cancel()
--- 		end
--- 		if self.targettime - dt > GetTime() then
--- 			self.targettime = self.targettime - dt
--- 			self.interrupted_task = self.inst:DoTaskInTime(self.interrupted_until - GetTime(), startperishing, self)
--- 			dt = 0            
--- 		else
--- 			dt = dt - self.targettime + GetTime()
--- 			docompost(self.inst, self)
--- 		end
+    local old_get = self.Get
+    self.Get = function(self, num)
+        -- print("stackable: Get " .. tostring(self) .. " " ..tostring(num))
 
---         long_update(dt)
---     end
+        local return_instance = old_get(self, num)
 
--- 	function self:SomeCoolFn()
--- 		print("SomeCoolFn fired")
---     end
+        -- basically copy the current chillable effect from one stack to the new one
+
+        local num_to_get = num or 1
+        -- partly taken from stackable.lua:59
+        if self.stacksize > num_to_get then
+            if self.inst.components.chillable ~= nil then
+                if self.inst.components.chillable.chilled_until ~= nil then
+                    print("stackable: ChillUntil " .. self.inst.components.chillable.chilled_until)
+                    return_instance.components.chillable:ChillUntil(self.inst.components.chillable.chilled_until)
+                end
+            end
+        end
+
+        return return_instance
+    end
+
+    local old_put = self.Put
+    self.Put = function(self, item, source_pos)
+        -- partly taken from stackable.lua:90
+
+        -- print("stackable: Put " .. tostring(self) .. " " ..tostring(item) .. " " .. tostring(source_pos))
+
+        -- the following condition expects that 
+        --- both inst have chillable
+        --- or both inst don't have chillable
+        if item.prefab == self.inst.prefab and item.skinname == self.inst.skinname then
+
+            -- dilute the chillable effect in the new stack
+            if self.inst.components.chillable ~= nil and item.components.chillable ~= nil then
+                local newtotal = self.stacksize + item.components.stackable.stacksize
+
+                local newsize = math.min(self.maxsize, self.stacksize + item.components.stackable.stacksize)        
+                local number_added = newsize - self.stacksize
+                
+                print("stackable: Put " .. tostring(self) .. " " ..tostring(item) .. " " .. tostring(source_pos))
+                self.inst.components.chillable:Dilute(item.components.chillable:GetChilledUntil(), number_added)
+            end
+        end
+
+        return old_put(self, item, source_pos)
+    end
+end
+
+AddComponentPostInit("stackable", stackable_stuff)
+
+
+-- other miscellaneous adjustments for specific items:  ------
+
+local function add_chillable_to_perishable(component, inst)
+    inst:AddComponent("chillable")
+end
+
+local function overwrite_hambat_damage(inst)
+    -- chillable component is added via perishable
+
+    -- overwrite damage
+    -- chilled hambats are harder!
+    if inst.components.weapon ~= nil then
+        local old_setdamage = inst.components.weapon.SetDamage
+        inst.components.weapon.SetDamage = function(self, dmg)
+            local new_dmg = dmg
+
+            if inst.components.chillable ~= nil then
+                if inst.components.chillable:GetChilledUntil() ~= nil then
+                    new_dmg = new_dmg * 1.1
+                end
+            end
+
+            old_setdamage(self, new_dmg)
+        end
+    end
+end
+
+local function overwrite_edible_oneaten_temperature(self, inst)
+    inst:AddComponent("chillable")
     
--- 	inst:AddTag("chillable")
--- end
- 
--- AddComponentPostInit("perishable", PerishablePostInit)
+    local old_oneaten = self.OnEaten
+    self.OnEaten = function(oneaten_self, eater)
+
+        -- local old_edible_component_temperaturedelta = self.temperaturedelta 
+        -- local old_edible_component_temperatureduration = self.temperatureduration
+
+        -- KÜHLENDE TEMPERATUR SETZEN
+        if inst.components.chillable ~= nil then
+            if inst.components.chillable:GetChilledUntil() ~= nil then
+                self.temperaturedelta = TUNING.COLD_FOOD_BONUS_TEMP
+                self.temperatureduration = TUNING.FOOD_TEMP_BRIEF
+            end
+        end
+
+        -- STANDARD DS ZEUG
+        old_oneaten(oneaten_self, eater)
+
+        -- KÜHLENDE TEMPERATUR ZURÜCKSETZEN
+        -- if inst.components.chillable ~= nil then
+        --     if inst.components.chillable:GetChilledUntil() ~= nil then
+        --         self.temperaturedelta = old_edible_component_temperaturedelta
+        --         self.temperatureduration = old_edible_component_temperatureduration
+        --     end
+        -- end
+    end
+end
+
+AddComponentPostInit("perishable", add_chillable_to_perishable)
+AddPrefabPostInit("hambat", overwrite_hambat_damage)
+AddComponentPostInit("edible", overwrite_edible_oneaten_temperature)

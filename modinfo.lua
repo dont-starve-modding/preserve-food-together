@@ -1,6 +1,6 @@
-name = "Preserve Food"
-version = "1.0.0"
-description = "Version " .. version .. "\n\n Use ice to temporarily preserve food in your inventory."
+name = "Preserve Food Together"
+version = "1.0.2"
+description = "Version " .. version .. "\n\nUse ice to temporarily preserve food in your inventory."
 author = "s1m13"
 
 api_version = 10
